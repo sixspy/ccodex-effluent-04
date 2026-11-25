@@ -1,0 +1,98 @@
+PING_METRIC_LOCK round=1 ok=True
+{
+  "sample": "SM-D22",
+  "sample_id": 6,
+  "lock_key": "sample:6",
+  "sealed": true,
+  "cod_before": 22.0,
+  "cod_after": 22.0,
+  "outcomes": {
+    "B": {
+      "acquire": 409,
+      "acquire_body": {
+        "ok": false,
+        "code": "lock_busy",
+        "detail": "并发抢批锁落败：sample:6 持有人 admin#ping-A；后到仅留争用痕，指标零写入",
+        "message": "并发抢批锁落败：sample:6 持有人 admin#ping-A；后到仅留争用痕，指标零写入"
+      },
+      "write": 409,
+      "write_body": {
+        "ok": false,
+        "code": "lock_busy",
+        "detail": "锁被占用：sample:6 持有人 admin#ping-A；后到会话仅留争用痕，指标零写入",
+        "message": "锁被占用：sample:6 持有人 admin#ping-A；后到会话仅留争用痕，指标零写入"
+      },
+      "cod": 43.3,
+      "session_id": "ping-B"
+    },
+    "A": {
+      "acquire": 200,
+      "acquire_body": {
+        "ok": true,
+        "lock_key": "sample:6",
+        "holder": "admin#ping-A"
+      },
+      "write": 409,
+      "write_body": {
+        "ok": false,
+        "code": "metric_frozen_after_seal",
+        "detail": "封后禁改偏航：SM-D22 封批代 G2 已生效，COD/氨氮/总磷三列只读，正式指标表一律零改并拒写",
+        "message": "封后禁改偏航：SM-D22 封批代 G2 已生效，COD/氨氮/总磷三列只读，正式指标表一律零改并拒写"
+      },
+      "cod": 41.1,
+      "session_id": "ping-A"
+    }
+  },
+  "contention_for_key": [
+    {
+      "id": 5,
+      "lock_key": "sample:6",
+      "actor": "writer#ping-B",
+      "action": "争用失败",
+      "detail": "持有人=admin#ping-A",
+      "created_at": "2026-11-25T03:08:46"
+    },
+    {
+      "id": 4,
+      "lock_key": "sample:6",
+      "actor": "writer#ping-B",
+      "action": "争用失败",
+      "detail": "持有人=admin#ping-A",
+      "created_at": "2026-11-25T03:08:46"
+    },
+    {
+      "id": 3,
+      "lock_key": "sample:6",
+      "actor": "writer#ping-B",
+      "action": "争用失败",
+      "detail": "持有人=admin",
+      "created_at": "2026-11-25T03:08:24"
+    },
+    {
+      "id": 2,
+      "lock_key": "sample:6",
+      "actor": "admin#ping-A",
+      "action": "争用失败",
+      "detail": "持有人=admin",
+      "created_at": "2026-11-25T03:08:24"
+    },
+    {
+      "id": 1,
+      "lock_key": "sample:6",
+      "actor": "writer",
+      "action": "争用失败",
+      "detail": "持有人=admin",
+      "created_at": "2026-11-25T03:08:24"
+    }
+  ],
+  "checks": {
+    "acquire_one_win_one_busy": true,
+    "loser_is_lock_busy": true,
+    "contention_trace_persisted": true,
+    "loser_value_zero_write": true,
+    "winner_hits_freeze_not_lock": true,
+    "sealed_official_unchanged": true
+  }
+}
+CHECKS {"acquire_one_win_one_busy": true, "loser_is_lock_busy": true, "contention_trace_persisted": true, "loser_value_zero_write": true, "winner_hits_freeze_not_lock": true, "sealed_official_unchanged": true}
+PING_METRIC_LOCK VERDICT PASS

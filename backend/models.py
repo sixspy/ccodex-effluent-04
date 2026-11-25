@@ -36,6 +36,23 @@ class SampleIn(BaseModel):
     sample_code: str | None = None
 
 
+class MetricWriteIn(BaseModel):
+    """监控台指标回写（effluent-04）。
+
+    兼容扁平 {cod,nh3n,tp}、嵌套 {metrics:{...}} 与集合式 {sample_id,...}。
+    封批代生效后任何形态都拒写。
+    """
+
+    sample_id: int | None = None
+    sample_code: str | None = None
+    cod: float | None = Field(default=None, ge=0)
+    nh3n: float | None = Field(default=None, ge=0)
+    tp: float | None = Field(default=None, ge=0)
+    metrics: dict | None = None
+    session_id: str | None = None
+    reason: str = ""
+
+
 class ExceedOpenIn(BaseModel):
     sample_id: int
     note: str = ""
@@ -71,6 +88,8 @@ class LineageIn(BaseModel):
     to_sample_id: int | None = None
     edge_type: str
     detail: str
+    layer: str = "official"
+    draft_code: str | None = None
 
 
 class StubJobIn(BaseModel):

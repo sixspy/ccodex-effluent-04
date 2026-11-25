@@ -1,0 +1,63 @@
+============================= test session starts ==============================
+platform linux -- Python 3.11.2, pytest-9.2.0, pluggy-1.7.0 -- /tmp/eff_venv/bin/python
+cachedir: .pytest_cache
+rootdir: /workspace
+configfile: pytest.ini
+testpaths: tests
+plugins: anyio-4.16.0
+collecting ... collected 28 items
+
+tests/test_effluent_04_acceptance.py::test_reconcile_d22_lamp_generation_aligned PASSED [  3%]
+tests/test_effluent_04_acceptance.py::test_reconcile_e01_sealed_sample_green_at_g2 PASSED [  7%]
+tests/test_effluent_04_acceptance.py::test_outfall_curve_points_share_official_timestamp PASSED [ 10%]
+tests/test_effluent_04_acceptance.py::test_writeback_aliases_all_reject[/api/samples/{sid}/metrics-payload0] PASSED [ 14%]
+tests/test_effluent_04_acceptance.py::test_writeback_aliases_all_reject[/api/samples/{sid}/metric-payload1] PASSED [ 17%]
+tests/test_effluent_04_acceptance.py::test_writeback_aliases_all_reject[/api/samples/metrics-payload2] PASSED [ 21%]
+tests/test_effluent_04_acceptance.py::test_writeback_aliases_all_reject[/api/metrics/writeback-payload3] PASSED [ 25%]
+tests/test_effluent_04_acceptance.py::test_writeback_aliases_all_reject[/api/metric/writeback-payload4] PASSED [ 28%]
+tests/test_effluent_04_acceptance.py::test_writeback_aliases_all_reject[/api/samples/metric-payload5] PASSED [ 32%]
+tests/test_effluent_04_acceptance.py::test_frontend_pages_carry_required_hooks PASSED [ 35%]
+tests/test_effluent_04_jia.py::test_jia_1_hard_update_sealed_official_metrics_must_be_aborted PASSED [ 39%]
+tests/test_effluent_04_jia.py::test_jia_2_writeback_api_must_reject_sealed_sm_d22 PASSED [ 42%]
+tests/test_effluent_04_jia.py::test_jia_2b_collection_alias_writeback_also_rejects PASSED [ 46%]
+tests/test_effluent_04_jia.py::test_jia_3_rejection_leaves_deviation_trace PASSED [ 50%]
+tests/test_effluent_04_jia.py::test_jia_4_sample_detail_reports_metrics_readonly PASSED [ 53%]
+tests/test_effluent_04_yi.py::test_yi_1_lineage_must_not_mix_unpromoted_shadow_draft PASSED [ 57%]
+tests/test_effluent_04_yi.py::test_yi_2_official_control_edge_still_visible PASSED [ 60%]
+tests/test_effluent_04_yi.py::test_yi_3_shadow_drafts_isolated_readonly_endpoint PASSED [ 64%]
+tests/test_effluent_04_yi.py::test_yi_4_lineage_create_cannot_smuggle_shadow_layer PASSED [ 67%]
+tests/test_effluent_04_zheng.py::test_zheng_1_late_session_blocked_by_batch_lock PASSED [ 71%]
+tests/test_effluent_04_zheng.py::test_zheng_2_two_concurrent_sessions_race_acquire_and_write PASSED [ 75%]
+tests/test_effluent_04_zheng.py::test_zheng_3_sealed_d22_lock_error_distinct_from_freeze PASSED [ 78%]
+tests/test_smoke.py::test_health_and_seed PASSED                         [ 82%]
+tests/test_smoke.py::test_sample_exceed_release_seal_flow PASSED         [ 85%]
+tests/test_smoke.py::test_viewer_cannot_write PASSED                     [ 89%]
+tests/test_smoke.py::test_reconcile_seed_permit PASSED                   [ 92%]
+tests/test_stubs.py::test_lab_courier_stub PASSED                        [ 96%]
+tests/test_stubs.py::test_sludge_plan_stub PASSED                        [100%]
+
+=============================== warnings summary ===============================
+../tmp/eff_venv/lib/python3.11/site-packages/starlette/testclient.py:40
+  /tmp/eff_venv/lib/python3.11/site-packages/starlette/testclient.py:40: DeprecationWarning: The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead.
+    _PortalFactoryType = typing.Callable[[], typing.ContextManager[anyio.abc.BlockingPortal]]
+
+backend/app.py:57
+  /workspace/backend/app.py:57: DeprecationWarning: 
+          on_event is deprecated, use lifespan event handlers instead.
+  
+          Read more about it in the
+          [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+          
+    @app.on_event("startup")
+
+../tmp/eff_venv/lib/python3.11/site-packages/fastapi/applications.py:4495
+  /tmp/eff_venv/lib/python3.11/site-packages/fastapi/applications.py:4495: DeprecationWarning: 
+          on_event is deprecated, use lifespan event handlers instead.
+  
+          Read more about it in the
+          [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+          
+    return self.router.on_event(event_type)
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+======================== 28 passed, 3 warnings in 8.57s ========================

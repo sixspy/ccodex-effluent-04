@@ -1,0 +1,28 @@
+{
+  "base": "http://127.0.0.1:8000",
+  "results": {
+    "封批页": {
+      "ok": true,
+      "detail": "SM-D22 行显示「封批代已生效 · G2」标记"
+    },
+    "采样页": {
+      "ok": true,
+      "detail": "三输入只读/按钮禁用；浏览器强写 409 metric_frozen_after_seal"
+    },
+    "血缘页": {
+      "ok": true,
+      "detail": "主表无未升正影子修订；隔离台账可查 SD-SM-D22-G2-R1"
+    },
+    "对账页": {
+      "ok": true,
+      "detail": "DP-2026-D22 不合格灯 G2；SM-D22 按封批快照判定并标偏航漂移"
+    },
+    "排放口页": {
+      "ok": true,
+      "detail": "曲线点戳与表戳一致且=正式指标行时间戳：['2026-11-21T08:40:00', '2026-11-22T10:00:00']"
+    }
+  },
+  "console_errors": [
+    "Failed to load resource: the server responded with a status of 409 (Conflict)"
+  ]
+}

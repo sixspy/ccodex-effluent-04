@@ -1,14 +1,15 @@
 """污水排放批 — FastAPI 入口。"""
 from __future__ import annotations
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from audit_svc import router as audit_router
 from auth import router as auth_router
 from db import FRONTEND, PRODUCT_META, init_db
+from effluent_errors import ApiConflict
 from exceed_svc import router as exceed_router
 from lab_courier_stub_svc import router as lab_router
 from locks import router as locks_router
@@ -56,6 +57,19 @@ for r in (
 @app.on_event("startup")
 def _startup() -> None:
     init_db()
+
+
+@app.exception_handler(ApiConflict)
+async def _api_conflict_handler(_request: Request, exc: ApiConflict):
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={
+            "ok": False,
+            "code": exc.code,
+            "detail": exc.message,
+            "message": exc.message,
+        },
+    )
 
 
 @app.get("/api/health")

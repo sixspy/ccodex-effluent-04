@@ -1,0 +1,14 @@
+[eff04] temp db = /tmp/eff04_repro_7crln67g/repro.db
+
+=== jia_official_rewrite: REPRODUCED ===
+  ! 正式指标列仍被改写 cod 22.0 -> 9.9（封批快照口径=56.0）
+  ! 对账继续亮合格（读被硬改后的正式列，与封批快照不同代）
+
+=== yi_shadow_in_lineage: REPRODUCED ===
+  ! 影子草稿边混入血缘页：shadow_draft:SD-SM-D22-G2-R1 未升正即混入血缘页
+
+=== zheng_no_batch_lock: REPRODUCED ===
+  ! 两路同批改指标无锁：A=11.1 写入被覆盖，最终 cod=33.3（丢失更新）
+  ! 无批锁记录、无争用痕
+
+VERDICT: THREE INCIDENTS REPRODUCED (三红有据)

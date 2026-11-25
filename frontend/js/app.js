@@ -64,6 +64,12 @@ createApp({
     const lineageForm = ref({
       from_sample_id: 1, to_sample_id: 2, edge_type: "复测续批", detail: "试验血缘",
     });
+    const metricTarget = ref({ id: null, sample_code: "", cod: null, nh3n: null, tp: null, readonly: false, generation: null, lock_key: "" });
+    const showDrafts = ref(false);
+    const metricDraftsList = ref([]);
+    const curveOutfallId = ref(null);
+    const curvePoints = ref([]);
+    const sealEffectiveProbe = ref(null);
     const labForm = ref({ sample_code: "SM-OF-E1-A-001", courier_slot: "A1" });
     const sludgeForm = ref({ plant_id: 1, digester_bay: "D-01" });
 
@@ -120,6 +126,7 @@ createApp({
         localStorage.setItem("effluent_token", data.token);
         localStorage.setItem("effluent_user", data.username);
         await refresh();
+        probeSeal("SM-D22").catch(() => {});
       } catch (e) {
         err.value = e.message || String(e);
       }
@@ -136,6 +143,7 @@ createApp({
       seals.value = (await api.seals()).items;
       permits.value = (await api.permits()).items;
       lineageEdges.value = (await api.lineage()).items;
+      reconAllItems.value = (await api.reconcile()).items;
       labJobs.value = (await api.labJobs()).items;
       sludgeJobs.value = (await api.sludgeJobs()).items;
       if (!releaseForm.value.sample_id && releasableSamples.value.length) {
@@ -144,10 +152,99 @@ createApp({
       if (!sealForm.value.sample_id && sealableSamples.value.length) {
         sealForm.value.sample_id = sealableSamples.value[0].id;
       }
+      // effluent-04：进采样页即定位 SM-D22（或首个封批生效批次），三输入立即只读
+      if (!metricTarget.value.id) {
+        const d22 = samples.value.find((s) => s.sample_code === "SM-D22")
+          || samples.value.find((s) => s.metrics_readonly);
+        if (d22) await pickSample(d22);
+      }
+      // effluent-04：排放口曲线默认 OF-D22
+      if (!curveOutfallId.value && outfalls.value.length) {
+        const of = outfalls.value.find((o) => o.outfall_code === "OF-D22") || outfalls.value[0];
+        curveOutfallId.value = of.id;
+        await loadCurve(of.id);
+      }
     }
 
     async function loadPlant(id) { plantDetail.value = await api.plant(id); }
     async function loadSample(id) { sampleDetail.value = await api.sample(id); }
+
+    function fillMetricTarget(detail) {
+      const s = detail.sample;
+      const m = s.metrics || {};
+      metricTarget.value = {
+        id: s.id,
+        sample_code: s.sample_code,
+        generation: s.generation,
+        cod: m.cod, nh3n: m.nh3n, tp: m.tp,
+        readonly: !!s.metrics_readonly,
+        marker: s.effective_marker,
+        lock_key: s.lock_key || ("sample:" + s.id),
+      };
+    }
+    async function pickSample(row) {
+      sampleDetail.value = await api.sample(row.id);
+      fillMetricTarget(sampleDetail.value);
+    }
+    async function reloadMetricTarget() {
+      if (!metricTarget.value.id) return;
+      sampleDetail.value = await api.sample(metricTarget.value.id);
+      fillMetricTarget(sampleDetail.value);
+    }
+    async function saveMetric() {
+      if (metricTarget.value.readonly) return; // 前端只读闸；后端另有冻结+触发器双闸
+      const id = metricTarget.value.id;
+      await flash(() => api.writeMetric(id, {
+        cod: metricTarget.value.cod,
+        nh3n: metricTarget.value.nh3n,
+        tp: metricTarget.value.tp,
+      }));
+      await reloadMetricTarget();
+    }
+
+    async function toggleDrafts() {
+      showDrafts.value = !showDrafts.value;
+      if (showDrafts.value && !metricDraftsList.value.length) {
+        metricDraftsList.value = (await api.metricDrafts()).items;
+      }
+    }
+    function draftFmt(raw) {
+      try { const m = typeof raw === "string" ? JSON.parse(raw) : raw; return fmtMetrics(m); }
+      catch { return String(raw); }
+    }
+
+    async function loadCurve(id) {
+      if (!id) return;
+      const data = await api.outfallCurve(id);
+      curvePoints.value = data.points || [];
+    }
+    function metricLabel(k) {
+      return ({ cod: "COD", nh3n: "氨氮", tp: "总磷" })[k] || k;
+    }
+    const CURVE_W = 600, CURVE_H = 150, PAD = 30;
+    function curveX(i) {
+      const n = curvePoints.value.length;
+      if (n <= 1) return CURVE_W / 2;
+      return PAD + i * ((CURVE_W - PAD * 2) / (n - 1));
+    }
+    function curveY(v, key) {
+      const vals = curvePoints.value.map((p) => Number(p[key]) || 0);
+      let maxV = Math.max(1, ...vals);
+      const of = outfalls.value.find((o) => o.id === curveOutfallId.value);
+      const limKey = ({ cod: "cod_limit", nh3n: "nh3n_limit", tp: "tp_limit" })[key];
+      if (of && of[limKey]) maxV = Math.max(maxV, Number(of[limKey]));
+      const minV = 0;
+      const ratio = (Number(v) || 0 - minV) / (maxV - minV || 1);
+      return CURVE_H - PAD - ratio * (CURVE_H - PAD * 2);
+    }
+    function curveLine(key) {
+      return curvePoints.value
+        .map((p, i) => curveX(i).toFixed(1) + "," + curveY(p[key], key).toFixed(1))
+        .join(" ");
+    }
+    async function probeSeal(code) {
+      sealEffectiveProbe.value = await api.effectiveSeal(code || "SM-D22");
+    }
     async function createPlant() { await flash(() => api.createPlant(plantForm.value)); }
     async function createOutfall() { await flash(() => api.createOutfall(outfallForm.value)); }
     async function createSample() {
@@ -212,7 +309,10 @@ createApp({
 
     onMounted(async () => {
       if (token.value) {
-        try { await refresh(); } catch { logout(); }
+        try {
+          await refresh();
+          probeSeal("SM-D22").catch(() => {});
+        } catch { logout(); }
       }
     });
 
@@ -223,8 +323,13 @@ createApp({
       reconOne, reconAllItems, proofOne, reconCode, proofCode,
       plantForm, outfallForm, sampleForm, releaseForm, sealForm, permitForm,
       lineageForm, labForm, sludgeForm, releasableSamples, sealableSamples,
+      metricTarget, showDrafts, metricDraftsList, curveOutfallId, curvePoints,
+      sealEffectiveProbe, metricDrafts: metricDraftsList,
       login, logout, refresh, statusClass, sampleClass, fmtMetrics,
-      loadPlant, loadSample, createPlant, createOutfall, createSample,
+      loadPlant, loadSample, pickSample, reloadMetricTarget, saveMetric,
+      toggleDrafts, draftFmt, loadCurve, curveX, curveY, curveLine, metricLabel,
+      probeSeal,
+      createPlant, createOutfall, createSample,
       closeExceed, createRelease, createSeal, createPermit, createLineage,
       loadReconcile, loadReconcileOne, loadProof, enqueueLab, enqueueSludge,
     };

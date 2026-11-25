@@ -198,3 +198,22 @@ pre {
   max-height: 280px;
   overflow: auto;
 }
+
+/* effluent-04 封后禁改 */
+.badge {
+  display: inline-block; padding: 0.12rem 0.5rem; border-radius: 999px;
+  font-size: 0.76rem; border: 1px solid var(--line); white-space: nowrap;
+}
+.badge.lock { background: #f8ecea; color: var(--danger); border-color: #e2b7b0; font-weight: 600; }
+.badge.official { background: #eaf4ee; color: var(--ok); border-color: #b9d8c8; }
+.readonly-input, input[readonly], textarea[readonly] {
+  background: #f1efea !important; color: #6b675e; cursor: not-allowed;
+  border-style: dashed;
+}
+.btn-disabled, button:disabled { opacity: 0.5; cursor: not-allowed; }
+tr.row-selected { background: #eef5f3; outline: 2px solid #b9d8c8; }
+.curve-chart { margin-top: 0.8rem; }
+.curve-chart h4 { margin: 0.2rem 0; font-size: 0.88rem; color: var(--teal); }
+.curve-svg { background: #fbfaf6; border: 1px solid var(--line); border-radius: 8px; max-width: 100%; height: auto; }
+.curve-point { cursor: crosshair; }
+.footnote { font-size: 0.78rem; color: var(--muted); margin: 0.2rem 0 0.6rem; }

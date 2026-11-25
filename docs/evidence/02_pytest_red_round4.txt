@@ -1,0 +1,465 @@
+============================= test session starts ==============================
+platform linux -- Python 3.11.2, pytest-9.2.0, pluggy-1.7.0 -- /tmp/eff_venv/bin/python
+cachedir: .pytest_cache
+rootdir: /workspace
+configfile: pytest.ini
+plugins: anyio-4.16.0
+collecting ... collected 12 items
+
+tests/test_effluent_04_jia.py::test_jia_1_hard_update_sealed_official_metrics_must_be_aborted FAILED [  8%]
+tests/test_effluent_04_jia.py::test_jia_2_writeback_api_must_reject_sealed_sm_d22 FAILED [ 16%]
+tests/test_effluent_04_jia.py::test_jia_2b_collection_alias_writeback_also_rejects FAILED [ 25%]
+tests/test_effluent_04_jia.py::test_jia_3_rejection_leaves_deviation_trace FAILED [ 33%]
+tests/test_effluent_04_jia.py::test_jia_4_sample_detail_reports_metrics_readonly FAILED [ 41%]
+tests/test_effluent_04_yi.py::test_yi_1_lineage_must_not_mix_unpromoted_shadow_draft FAILED [ 50%]
+tests/test_effluent_04_yi.py::test_yi_2_official_control_edge_still_visible PASSED [ 58%]
+tests/test_effluent_04_yi.py::test_yi_3_shadow_drafts_isolated_readonly_endpoint FAILED [ 66%]
+tests/test_effluent_04_yi.py::test_yi_4_lineage_create_cannot_smuggle_shadow_layer FAILED [ 75%]
+tests/test_effluent_04_zheng.py::test_zheng_1_late_session_blocked_by_batch_lock FAILED [ 83%]
+tests/test_effluent_04_zheng.py::test_zheng_2_two_concurrent_sessions_race_acquire_and_write FAILED [ 91%]
+tests/test_effluent_04_zheng.py::test_zheng_3_sealed_d22_lock_error_distinct_from_freeze FAILED [100%]
+
+=================================== FAILURES ===================================
+________ test_jia_1_hard_update_sealed_official_metrics_must_be_aborted ________
+
+ctx = {'ids': {'plant_id': 5, 'outfall_id': 6, 'sample_id': 6, 'probe_id': 7, ...}, 'client': <starlette.testclient.TestClie...iAiYWRtaW4iLCAiZXhwIjogMTc5NTYzMzI5NS4zMjc4NjEzfQ==.faa0ef844ad1a84918ef70cfab20e0ed0bc5b494e65beb79b49ba8b0524ef86b'}}
+
+    def test_jia_1_hard_update_sealed_official_metrics_must_be_aborted(ctx):
+        """甲红：已封批代 G2 的正式指标列仍能被硬改。"""
+        import db
+    
+        sid = ctx["ids"]["sample_id"]
+        fx = load_incident()
+        sealed_value = fx["official_metrics_before_attack"]["cod"]
+    
+        with db.connect() as conn:
+            before = conn.execute(
+                "SELECT metrics FROM sample_batches WHERE id=?", (sid,)
+            ).fetchone()["metrics"]
+    
+        attack = '{"cod": 1.1, "nh3n": 0.1, "tp": 0.01}'
+        rejected = False
+        try:
+            with db.connect() as conn:
+                conn.execute(
+                    "UPDATE sample_batches SET metrics=? WHERE id=?", (attack, sid)
+                )
+                conn.commit()
+        except sqlite3.DatabaseError as exc:  # 绿：触发器 RAISE ABORT
+            rejected = True
+            assert DEVIATION_PHRASE in str(exc), f"拒写原因必须定性为 {DEVIATION_PHRASE}"
+    
+        with db.connect() as conn:
+            after_row = conn.execute(
+                "SELECT metrics FROM sample_batches WHERE id=?", (sid,)
+            ).fetchone()
+            after = __import__("json").loads(after_row["metrics"])
+    
+        if not rejected:
+>           pytest.fail(
+                f"甲红：封批代生效后正式指标列仍被改写（before={before} after={after_row['metrics']}），"
+                "库层无封后禁改触发器"
+            )
+E           Failed: 甲红：封批代生效后正式指标列仍被改写（before={"cod": 22.0, "nh3n": 2.0, "tp": 0.18} after={"cod": 1.1, "nh3n": 0.1, "tp": 0.01}），库层无封后禁改触发器
+
+tests/test_effluent_04_jia.py:79: Failed
+______________ test_jia_2_writeback_api_must_reject_sealed_sm_d22 ______________
+
+ctx = {'ids': {'plant_id': 5, 'outfall_id': 6, 'sample_id': 6, 'probe_id': 7, ...}, 'client': <starlette.testclient.TestClie...nIiOiAiYWRtaW4iLCAiZXhwIjogMTc5NTYzMzI5NS42Mjg0NjV9.20d20d6fdee894475435471b67c4a786ef79bc3b07dd98b4fa8125779c20e0a7'}}
+
+    def test_jia_2_writeback_api_must_reject_sealed_sm_d22(ctx):
+        """甲红：监控台回写 COD 未被拒（当前实现无此端点 -> 404 亦为红）。"""
+        c, h, sid = ctx["client"], ctx["h"], ctx["ids"]["sample_id"]
+        r = c.post(
+            f"/api/samples/{sid}/metrics",
+            headers=h,
+            json={"cod": 77.0, "nh3n": 7.7, "tp": 0.77},
+        )
+>       assert r.status_code in (403, 409), (
+            f"甲红：封批生效后指标回写必须拒写(403/409)，实际 {r.status_code} {r.text[:200]}"
+        )
+E       AssertionError: 甲红：封批生效后指标回写必须拒写(403/409)，实际 404 {"detail":"Not Found"}
+E       assert 404 in (403, 409)
+E        +  where 404 = <Response [404 Not Found]>.status_code
+
+tests/test_effluent_04_jia.py:96: AssertionError
+_____________ test_jia_2b_collection_alias_writeback_also_rejects ______________
+
+ctx = {'ids': {'plant_id': 5, 'outfall_id': 6, 'sample_id': 6, 'probe_id': 7, ...}, 'client': <starlette.testclient.TestClie...iAiYWRtaW4iLCAiZXhwIjogMTc5NTYzMzI5NS44MTczMDk2fQ==.0a0c50883fed8994775d2869024dca6f30c69e327d41e96b171f803180acf92d'}}
+
+    def test_jia_2b_collection_alias_writeback_also_rejects(ctx):
+        """同一甲路径的集合式别名 /api/samples/metrics 也必须拒写。"""
+        c, h, sid = ctx["client"], ctx["h"], ctx["ids"]["sample_id"]
+        r = c.post(
+            "/api/samples/metrics",
+            headers=h,
+            json={"sample_id": sid, "metrics": {"cod": 88.0, "nh3n": 8.8, "tp": 0.88}},
+        )
+>       assert r.status_code in (403, 409), f"别名回写未拒：{r.status_code} {r.text[:200]}"
+E       AssertionError: 别名回写未拒：405 {"detail":"Method Not Allowed"}
+E       assert 405 in (403, 409)
+E        +  where 405 = <Response [405 Method Not Allowed]>.status_code
+
+tests/test_effluent_04_jia.py:122: AssertionError
+_________________ test_jia_3_rejection_leaves_deviation_trace __________________
+
+ctx = {'ids': {'plant_id': 5, 'outfall_id': 6, 'sample_id': 6, 'probe_id': 7, ...}, 'client': <starlette.testclient.TestClie...iAiYWRtaW4iLCAiZXhwIjogMTc5NTYzMzI5Ni4wMTUyMzkyfQ==.5f29a9431896136e5457c1f5c6f64517804a7b8cc8618e371b5b31b6c6b5e38f'}}
+
+    def test_jia_3_rejection_leaves_deviation_trace(ctx):
+        """拒写必须留下「封后禁改偏航」偏离说明（deviation_log 或 audit_trail）。"""
+        import db
+    
+        c, h, sid = ctx["client"], ctx["h"], ctx["ids"]["sample_id"]
+        c.post(f"/api/samples/{sid}/metrics", headers=h, json={"cod": 5.0})
+        with db.connect() as conn:
+            audit = [
+                dict(r)
+                for r in conn.execute(
+                    "SELECT * FROM audit_trail WHERE target LIKE ? OR action LIKE ?",
+                    ("%SM-D22%", "%封后禁改%"),
+                ).fetchall()
+            ]
+            dev_rows = []
+            cols = {r[1] for r in conn.execute("PRAGMA table_info(deviation_log)").fetchall()}
+            if cols:
+                dev_rows = [
+                    dict(r)
+                    for r in conn.execute(
+                        "SELECT * FROM deviation_log WHERE sample_id=?", (sid,)
+                    ).fetchall()
+                ]
+        blob = str(audit) + str(dev_rows)
+>       assert DEVIATION_PHRASE in blob, (
+            f"甲红：拒写未记 {DEVIATION_PHRASE} 偏离痕（audit={len(audit)} dev={len(dev_rows)}）"
+        )
+E       AssertionError: 甲红：拒写未记 封后禁改偏航 偏离痕（audit=0 dev=0）
+E       assert '封后禁改偏航' in '[][]'
+
+tests/test_effluent_04_jia.py:149: AssertionError
+______________ test_jia_4_sample_detail_reports_metrics_readonly _______________
+
+ctx = {'ids': {'plant_id': 5, 'outfall_id': 6, 'sample_id': 6, 'probe_id': 7, ...}, 'client': <starlette.testclient.TestClie...iAiYWRtaW4iLCAiZXhwIjogMTc5NTYzMzI5Ni40NDY1ODk1fQ==.969172de086c95a5341f711d8d7123a310a1bcdce403434ffd204d5b250d51ce'}}
+
+    def test_jia_4_sample_detail_reports_metrics_readonly(ctx):
+        """采样页三输入只读必须有后端只读元数据支撑，禁止只换封批页锁图。"""
+        c, h = ctx["client"], ctx["h"]
+        r = c.get("/api/samples/SM-D22", headers=h)
+>       assert r.status_code == 200
+E       assert 422 == 200
+E        +  where 422 = <Response [422 Unprocessable Entity]>.status_code
+
+tests/test_effluent_04_jia.py:158: AssertionError
+____________ test_yi_1_lineage_must_not_mix_unpromoted_shadow_draft ____________
+
+client = (<starlette.testclient.TestClient object at 0x7f06a876e4d0>, {'Authorization': 'Bearer eyJ1IjogImFkbWluIiwgInIiOiAiYWRtaW4iLCAiZXhwIjogMTc5NTYzMzI5Ni42NDM2NjcyfQ==.18f1567ae38e99b2c821d1cd4a72086c2bc3ec2e4076e8755042132a98e7b789'})
+
+    def test_yi_1_lineage_must_not_mix_unpromoted_shadow_draft(client):
+        """乙红：未升正影子草稿边混在血缘主表。"""
+        c, h = client
+        r = c.get("/api/lineage", headers=h)
+        assert r.status_code == 200
+        items = r.json()["items"]
+        leaked = [i for i in items if _is_shadow(i)]
+        if leaked:
+>           pytest.fail(
+                "乙红：未升正影子草稿混入血缘页/API："
+                + " | ".join(f"{i.get('edge_type')}:{i.get('detail')}" for i in leaked)
+            )
+E           Failed: 乙红：未升正影子草稿混入血缘页/API：封后影子修订:shadow_draft:SD-SM-D22-G2-R1 未升正即混入血缘页
+
+tests/test_effluent_04_yi.py:52: Failed
+______________ test_yi_3_shadow_drafts_isolated_readonly_endpoint ______________
+
+client = (<starlette.testclient.TestClient object at 0x7f06a8602350>, {'Authorization': 'Bearer eyJ1IjogImFkbWluIiwgInIiOiAiYWRtaW4iLCAiZXhwIjogMTc5NTYzMzI5Ny4wMDUyMjExfQ==.207f08c209a8a1808e33458af50391545b1989c1de82dbad2a950fc44891c858'})
+
+    def test_yi_3_shadow_drafts_isolated_readonly_endpoint(client):
+        """影子草稿本身要有隔离台账（未升正），但与血缘主表分离。"""
+        c, h = client
+        r = c.get("/api/metric-drafts", headers=h)
+>       assert r.status_code == 200, "乙红：缺少影子草稿隔离只读台账 /api/metric-drafts"
+E       AssertionError: 乙红：缺少影子草稿隔离只读台账 /api/metric-drafts
+E       assert 404 == 200
+E        +  where 404 = <Response [404 Not Found]>.status_code
+
+tests/test_effluent_04_yi.py:71: AssertionError
+_____________ test_yi_4_lineage_create_cannot_smuggle_shadow_layer _____________
+
+client = (<starlette.testclient.TestClient object at 0x7f06a85ba190>, {'Authorization': 'Bearer eyJ1IjogImFkbWluIiwgInIiOiAiYWRtaW4iLCAiZXhwIjogMTc5NTYzMzI5Ny4xNzc4MTgzfQ==.c1949731a3b24fe41421feba3f4a002e45ff7395e91d98fe4017f24217758822'})
+
+    def test_yi_4_lineage_create_cannot_smuggle_shadow_layer(client):
+        """正式血缘写入通道不得私盖 shadow 层把封后修订洗白进主表。"""
+        c, h = client
+        r = c.post(
+            "/api/lineage",
+            headers=h,
+            json={
+                "from_sample_id": 1,
+                "edge_type": SHADOW_EDGE_TYPE,
+                "detail": "shadow_draft:SD-FAKE 试图混入",
+                "layer": "shadow",
+            },
+        )
+        # 要么拒写，要么写成 official 但仍被影子规则识别；最稳妥是 4xx 拒写
+        if r.status_code < 400:
+            items = c.get("/api/lineage", headers=h).json()["items"]
+>           assert not any("SD-FAKE" in (i.get("detail") or "") and _is_shadow(i) for i in items)
+E           assert not True
+E            +  where True = any(<generator object test_yi_4_lineage_create_cannot_smuggle_shadow_layer.<locals>.<genexpr> at 0x7f06a8645fc0>)
+
+tests/test_effluent_04_yi.py:96: AssertionError
+_______________ test_zheng_1_late_session_blocked_by_batch_lock ________________
+
+ctx = {'ids': {'plant_id': 5, 'outfall_id': 6, 'sample_id': 6, 'probe_id': 7, ...}, 'client': <starlette.testclient.TestClient object at 0x7f06a85a8250>, 'login': <function ctx.<locals>.login at 0x7f06a8642e80>}
+
+    def test_zheng_1_late_session_blocked_by_batch_lock(ctx):
+        """确定性争用：admin 持批锁，writer 后到回写必须 409 + 争用痕 + 零写入。"""
+        c, login = ctx["client"], ctx["login"]
+        sid = ctx["ids"]["probe_id"]  # 未封批探针：排除封批标记单点判断
+        key = f"sample:{sid}"
+        ha, hw = login("admin", "admin123"), login("writer", "writer123")
+    
+        acq = c.post(f"/api/locks/acquire?lock_key={key}", headers=ha)
+        assert acq.status_code == 200
+    
+        r = c.post(
+            f"/api/samples/{sid}/metrics",
+            headers=hw,
+            json={"cod": 61.6, "nh3n": 6.1, "tp": 0.61},
+        )
+        if r.status_code == 404:
+>           pytest.fail("争用红：指标回写端点不存在，两路同批改指标无锁可抢")
+E           Failed: 争用红：指标回写端点不存在，两路同批改指标无锁可抢
+
+tests/test_effluent_04_zheng.py:81: Failed
+_________ test_zheng_2_two_concurrent_sessions_race_acquire_and_write __________
+
+ctx = {'ids': {'plant_id': 5, 'outfall_id': 6, 'sample_id': 6, 'probe_id': 7, ...}, 'client': <starlette.testclient.TestClient object at 0x7f06a877c6d0>, 'login': <function ctx.<locals>.login at 0x7f06a8643c40>}
+
+    def test_zheng_2_two_concurrent_sessions_race_acquire_and_write(ctx):
+        """两路线程屏障并发：先抢批锁再同批改指标，恰好一成一败，败方零写入。"""
+        ids, login = ctx["ids"], ctx["login"]
+        sid = ids["probe_id"]
+        key = f"sample:{sid}"
+        acq_barrier = threading.Barrier(2)
+        write_barrier = threading.Barrier(2)
+        outcomes: dict[str, dict] = {}
+    
+        def worker(username: str, password: str, cod: float):
+            client = TestClient(app)
+            tok = client.post(
+                "/api/login", json={"username": username, "password": password}
+            ).json()["token"]
+            h = {"Authorization": "Bearer " + tok}
+            acq_barrier.wait(timeout=10)
+            ra = client.post(f"/api/locks/acquire?lock_key={key}", headers=h)
+            write_barrier.wait(timeout=10)
+            rw = client.post(
+                f"/api/samples/{sid}/metrics",
+                headers=h,
+                json={"cod": cod, "nh3n": 1.1, "tp": 0.11},
+            )
+            outcomes[username] = {
+                "acquire": ra.status_code,
+                "write": rw.status_code,
+                "body": rw.json() if rw.headers.get("content-type", "").startswith("application/json") else {},
+                "cod": cod,
+            }
+    
+        t1 = threading.Thread(target=worker, args=("admin", "admin123", 11.1))
+        t2 = threading.Thread(target=worker, args=("writer", "writer123", 33.3))
+        t1.start(); t2.start(); t1.join(15); t2.join(15)
+    
+>       assert len(outcomes) == 2, "两个并发工作线程都必须返回"
+E       AssertionError: 两个并发工作线程都必须返回
+E       assert 0 == 2
+E        +  where 0 = len({})
+
+tests/test_effluent_04_zheng.py:127: AssertionError
+___________ test_zheng_3_sealed_d22_lock_error_distinct_from_freeze ____________
+
+ctx = {'ids': {'plant_id': 5, 'outfall_id': 6, 'sample_id': 6, 'probe_id': 7, ...}, 'client': <starlette.testclient.TestClient object at 0x7f06a8761750>, 'login': <function ctx.<locals>.login at 0x7f06a53f1e40>}
+
+    def test_zheng_3_sealed_d22_lock_error_distinct_from_freeze(ctx):
+        """SM-D22 已封批：锁忙 409(lock_busy) 与封后冻结 409(metric_frozen_after_seal) 必须可分。"""
+        c, login = ctx["client"], ctx["login"]
+        sid = ctx["ids"]["sample_id"]
+        key = f"sample:{sid}"
+        ha, hw = login("admin", "admin123"), login("writer", "writer123")
+        cod_before = _metric_cod(sid)
+    
+        assert c.post(f"/api/locks/acquire?lock_key={key}", headers=ha).status_code == 200
+    
+        r_holder = c.post(f"/api/samples/{sid}/metrics", headers=ha, json={"cod": 1.0})
+        r_loser = c.post(f"/api/samples/{sid}/metrics", headers=hw, json={"cod": 2.0})
+    
+>       assert r_holder.status_code == 409
+E       assert 404 == 409
+E        +  where 404 = <Response [404 Not Found]>.status_code
+
+tests/test_effluent_04_zheng.py:158: AssertionError
+=============================== warnings summary ===============================
+../tmp/eff_venv/lib/python3.11/site-packages/starlette/testclient.py:40
+  /tmp/eff_venv/lib/python3.11/site-packages/starlette/testclient.py:40: DeprecationWarning: The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead.
+    _PortalFactoryType = typing.Callable[[], typing.ContextManager[anyio.abc.BlockingPortal]]
+
+backend/app.py:56
+  /workspace/backend/app.py:56: DeprecationWarning: 
+          on_event is deprecated, use lifespan event handlers instead.
+  
+          Read more about it in the
+          [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+          
+    @app.on_event("startup")
+
+../tmp/eff_venv/lib/python3.11/site-packages/fastapi/applications.py:4495
+  /tmp/eff_venv/lib/python3.11/site-packages/fastapi/applications.py:4495: DeprecationWarning: 
+          on_event is deprecated, use lifespan event handlers instead.
+  
+          Read more about it in the
+          [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+          
+    return self.router.on_event(event_type)
+
+tests/test_effluent_04_zheng.py::test_zheng_2_two_concurrent_sessions_race_acquire_and_write
+  /tmp/eff_venv/lib/python3.11/site-packages/_pytest/threadexception.py:54: PytestUnhandledThreadExceptionWarning: Exception in thread Thread-28 (worker)
+  
+  Traceback (most recent call last):
+    File "/usr/lib/python3.11/threading.py", line 1038, in _bootstrap_inner
+      self.run()
+    File "/usr/lib/python3.11/threading.py", line 975, in run
+      self._target(*self._args, **self._kwargs)
+    File "/workspace/tests/test_effluent_04_zheng.py", line 110, in worker
+      write_barrier.wait(timeout=10)
+    File "/usr/lib/python3.11/threading.py", line 690, in wait
+      self._wait(timeout)
+    File "/usr/lib/python3.11/threading.py", line 728, in _wait
+      raise BrokenBarrierError
+  threading.BrokenBarrierError
+  
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+    warnings.warn(pytest.PytestUnhandledThreadExceptionWarning(msg))
+
+tests/test_effluent_04_zheng.py::test_zheng_2_two_concurrent_sessions_race_acquire_and_write
+  /tmp/eff_venv/lib/python3.11/site-packages/_pytest/threadexception.py:54: PytestUnhandledThreadExceptionWarning: Exception in thread Thread-29 (worker)
+  
+  Traceback (most recent call last):
+    File "/usr/lib/python3.11/threading.py", line 1038, in _bootstrap_inner
+      self.run()
+    File "/usr/lib/python3.11/threading.py", line 975, in run
+      self._target(*self._args, **self._kwargs)
+    File "/workspace/tests/test_effluent_04_zheng.py", line 109, in worker
+      ra = client.post(f"/api/locks/acquire?lock_key={key}", headers=h)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    File "/tmp/eff_venv/lib/python3.11/site-packages/starlette/testclient.py", line 593, in post
+      return super().post(
+             ^^^^^^^^^^^^^
+    File "/tmp/eff_venv/lib/python3.11/site-packages/httpx/_client.py", line 1144, in post
+      return self.request(
+             ^^^^^^^^^^^^^
+    File "/tmp/eff_venv/lib/python3.11/site-packages/starlette/testclient.py", line 484, in request
+      return super().request(
+             ^^^^^^^^^^^^^^^^
+    File "/tmp/eff_venv/lib/python3.11/site-packages/httpx/_client.py", line 825, in request
+      return self.send(request, auth=auth, follow_redirects=follow_redirects)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    File "/tmp/eff_venv/lib/python3.11/site-packages/httpx/_client.py", line 914, in send
+      response = self._send_handling_auth(
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^
+    File "/tmp/eff_venv/lib/python3.11/site-packages/httpx/_client.py", line 942, in _send_handling_auth
+      response = self._send_handling_redirects(
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    File "/tmp/eff_venv/lib/python3.11/site-packages/httpx/_client.py", line 979, in _send_handling_redirects
+      response = self._send_single_request(request)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    File "/tmp/eff_venv/lib/python3.11/site-packages/httpx/_client.py", line 1014, in _send_single_request
+      response = transport.handle_request(request)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    File "/tmp/eff_venv/lib/python3.11/site-packages/starlette/testclient.py", line 377, in handle_request
+      raise exc
+    File "/tmp/eff_venv/lib/python3.11/site-packages/starlette/testclient.py", line 374, in handle_request
+      portal.call(self.app, scope, receive, send)
+    File "/tmp/eff_venv/lib/python3.11/site-packages/anyio/from_thread.py", line 347, in call
+      return cast(T_Retval, self.start_task_soon(func, *args).result())
+                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    File "/usr/lib/python3.11/concurrent/futures/_base.py", line 456, in result
+      return self.__get_result()
+             ^^^^^^^^^^^^^^^^^^^
+    File "/usr/lib/python3.11/concurrent/futures/_base.py", line 401, in __get_result
+      raise self._exception
+    File "/tmp/eff_venv/lib/python3.11/site-packages/anyio/from_thread.py", line 272, in _call_func
+      retval = await retval_or_awaitable
+               ^^^^^^^^^^^^^^^^^^^^^^^^^
+    File "/tmp/eff_venv/lib/python3.11/site-packages/fastapi/applications.py", line 1054, in __call__
+      await super().__call__(scope, receive, send)
+    File "/tmp/eff_venv/lib/python3.11/site-packages/starlette/applications.py", line 113, in __call__
+      await self.middleware_stack(scope, receive, send)
+    File "/tmp/eff_venv/lib/python3.11/site-packages/starlette/middleware/errors.py", line 187, in __call__
+      raise exc
+    File "/tmp/eff_venv/lib/python3.11/site-packages/starlette/middleware/errors.py", line 165, in __call__
+      await self.app(scope, receive, _send)
+    File "/tmp/eff_venv/lib/python3.11/site-packages/starlette/middleware/cors.py", line 85, in __call__
+      await self.app(scope, receive, send)
+    File "/tmp/eff_venv/lib/python3.11/site-packages/starlette/middleware/exceptions.py", line 62, in __call__
+      await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+    File "/tmp/eff_venv/lib/python3.11/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+      raise exc
+    File "/tmp/eff_venv/lib/python3.11/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+      await app(scope, receive, sender)
+    File "/tmp/eff_venv/lib/python3.11/site-packages/starlette/routing.py", line 715, in __call__
+      await self.middleware_stack(scope, receive, send)
+    File "/tmp/eff_venv/lib/python3.11/site-packages/starlette/routing.py", line 735, in app
+      await route.handle(scope, receive, send)
+    File "/tmp/eff_venv/lib/python3.11/site-packages/starlette/routing.py", line 288, in handle
+      await self.app(scope, receive, send)
+    File "/tmp/eff_venv/lib/python3.11/site-packages/starlette/routing.py", line 76, in app
+      await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+    File "/tmp/eff_venv/lib/python3.11/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+      raise exc
+    File "/tmp/eff_venv/lib/python3.11/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+      await app(scope, receive, sender)
+    File "/tmp/eff_venv/lib/python3.11/site-packages/starlette/routing.py", line 73, in app
+      response = await f(request)
+                 ^^^^^^^^^^^^^^^^
+    File "/tmp/eff_venv/lib/python3.11/site-packages/fastapi/routing.py", line 301, in app
+      raw_response = await run_endpoint_function(
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    File "/tmp/eff_venv/lib/python3.11/site-packages/fastapi/routing.py", line 214, in run_endpoint_function
+      return await run_in_threadpool(dependant.call, **values)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    File "/tmp/eff_venv/lib/python3.11/site-packages/starlette/concurrency.py", line 39, in run_in_threadpool
+      return await anyio.to_thread.run_sync(func, *args)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    File "/tmp/eff_venv/lib/python3.11/site-packages/anyio/to_thread.py", line 65, in run_sync
+      return await get_async_backend().run_sync_in_worker_thread(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    File "/tmp/eff_venv/lib/python3.11/site-packages/anyio/_backends/_asyncio.py", line 2779, in run_sync_in_worker_thread
+      return await future
+             ^^^^^^^^^^^^
+    File "/tmp/eff_venv/lib/python3.11/site-packages/anyio/_backends/_asyncio.py", line 1124, in run
+      result = context.run(func, *args)
+               ^^^^^^^^^^^^^^^^^^^^^^^^
+    File "/workspace/backend/locks.py", line 55, in acquire
+      require_lock(conn, lock_key, user)
+    File "/workspace/backend/locks.py", line 24, in require_lock
+      conn.execute(
+  sqlite3.IntegrityError: UNIQUE constraint failed: effluent_locks.lock_key
+  
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+    warnings.warn(pytest.PytestUnhandledThreadExceptionWarning(msg))
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/test_effluent_04_jia.py::test_jia_1_hard_update_sealed_official_metrics_must_be_aborted
+FAILED tests/test_effluent_04_jia.py::test_jia_2_writeback_api_must_reject_sealed_sm_d22
+FAILED tests/test_effluent_04_jia.py::test_jia_2b_collection_alias_writeback_also_rejects
+FAILED tests/test_effluent_04_jia.py::test_jia_3_rejection_leaves_deviation_trace
+FAILED tests/test_effluent_04_jia.py::test_jia_4_sample_detail_reports_metrics_readonly
+FAILED tests/test_effluent_04_yi.py::test_yi_1_lineage_must_not_mix_unpromoted_shadow_draft
+FAILED tests/test_effluent_04_yi.py::test_yi_3_shadow_drafts_isolated_readonly_endpoint
+FAILED tests/test_effluent_04_yi.py::test_yi_4_lineage_create_cannot_smuggle_shadow_layer
+FAILED tests/test_effluent_04_zheng.py::test_zheng_1_late_session_blocked_by_batch_lock
+FAILED tests/test_effluent_04_zheng.py::test_zheng_2_two_concurrent_sessions_race_acquire_and_write
+FAILED tests/test_effluent_04_zheng.py::test_zheng_3_sealed_d22_lock_error_distinct_from_freeze
+================== 11 failed, 1 passed, 5 warnings in 13.60s ===================

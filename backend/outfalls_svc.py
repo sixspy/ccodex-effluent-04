@@ -1,6 +1,8 @@
 """排放口限值与开放态。"""
 from __future__ import annotations
 
+import json
+
 from fastapi import APIRouter, HTTPException
 
 from auth import AuthHeader, require_user, require_writer
@@ -8,6 +10,48 @@ from db import connect, now_iso, write_audit
 from models import OutfallIn
 
 router = APIRouter(tags=["outfalls"])
+
+
+def _curve_points(conn, outfall_id: int) -> list[dict]:
+    """曲线点严格取正式指标行；ts 用指标行自带时间戳（裁定时间优先，否则入库时间）。
+
+    这保证「排放口页曲线采样点与正式指标同戳」，前端不得另造时间轴。
+    """
+    rows = conn.execute(
+        """SELECT s.id, s.sample_code, s.status, s.generation, s.flow_m3h,
+                  s.metrics, s.created_at, s.adjudicated_at,
+                  (SELECT d.sample_generation FROM discharge_seals d
+                    WHERE d.sample_id=s.id AND d.status='已封批'
+                    ORDER BY d.sample_generation DESC LIMIT 1) AS seal_generation
+           FROM sample_batches s
+           WHERE s.outfall_id=? AND s.status NOT IN ('作废')
+           ORDER BY s.id ASC""",
+        (outfall_id,),
+    ).fetchall()
+    points = []
+    for r in rows:
+        metrics = json.loads(r["metrics"] or "{}")
+        ts = r["adjudicated_at"] or r["created_at"]
+        points.append(
+            {
+                "sample_id": r["id"],
+                "sample_code": r["sample_code"],
+                "ts": ts,
+                "timestamp": ts,
+                "created_at": r["created_at"],
+                "adjudicated_at": r["adjudicated_at"],
+                "status": r["status"],
+                "generation": r["generation"],
+                "seal_generation": r["seal_generation"],
+                "sealed": r["seal_generation"] is not None,
+                "flow_m3h": r["flow_m3h"],
+                "cod": metrics.get("cod"),
+                "nh3n": metrics.get("nh3n"),
+                "tp": metrics.get("tp"),
+                "metrics": metrics,
+            }
+        )
+    return points
 
 
 @router.get("/api/outfalls")
@@ -40,11 +84,41 @@ def get_outfall(outfall_id: int, authorization: AuthHeader = None):
         if not row:
             raise HTTPException(404, "排放口不存在")
         recent = conn.execute(
-            """SELECT sample_code, status, flow_m3h, created_at FROM sample_batches
+            """SELECT id, sample_code, status, flow_m3h, generation, metrics,
+                      created_at, adjudicated_at FROM sample_batches
                WHERE outfall_id=? ORDER BY id DESC LIMIT 10""",
             (outfall_id,),
         ).fetchall()
-        return {"outfall": dict(row), "recent_samples": [dict(s) for s in recent]}
+        recent_samples = []
+        for s in recent:
+            d = dict(s)
+            d["metrics"] = json.loads(d["metrics"] or "{}")
+            d["ts"] = d["adjudicated_at"] or d["created_at"]
+            recent_samples.append(d)
+        curve = _curve_points(conn, outfall_id)
+        return {
+            "outfall": dict(row),
+            "recent_samples": recent_samples,
+            "curve": curve,
+            "points": curve,
+        }
+
+
+@router.get("/api/outfalls/{outfall_id}/curve")
+def get_outfall_curve(outfall_id: int, authorization: AuthHeader = None):
+    require_user(authorization)
+    with connect() as conn:
+        row = conn.execute(
+            "SELECT id, outfall_code FROM outfalls WHERE id=?", (outfall_id,)
+        ).fetchone()
+        if not row:
+            raise HTTPException(404, "排放口不存在")
+        points = _curve_points(conn, outfall_id)
+        return {
+            "outfall_id": outfall_id,
+            "outfall_code": row["outfall_code"],
+            "points": points,
+        }
 
 
 @router.post("/api/outfalls")

@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+# effluent-04 争用脚本入口（ping_metric_lock）。纯 HTTP，可对已起服务直接打。
+set -euo pipefail
+DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+exec python3 "$DIR/ping_metric_lock.py" "$@"

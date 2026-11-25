@@ -1,0 +1,12 @@
+================== 11 failed, 1 passed, 5 warnings in 13.60s ===================
+FAILED tests/test_effluent_04_jia.py::test_jia_1_hard_update_sealed_official_metrics_must_be_aborted
+FAILED tests/test_effluent_04_jia.py::test_jia_2_writeback_api_must_reject_sealed_sm_d22
+FAILED tests/test_effluent_04_jia.py::test_jia_2b_collection_alias_writeback_also_rejects
+FAILED tests/test_effluent_04_jia.py::test_jia_3_rejection_leaves_deviation_trace
+FAILED tests/test_effluent_04_jia.py::test_jia_4_sample_detail_reports_metrics_readonly
+FAILED tests/test_effluent_04_yi.py::test_yi_1_lineage_must_not_mix_unpromoted_shadow_draft
+FAILED tests/test_effluent_04_yi.py::test_yi_3_shadow_drafts_isolated_readonly_endpoint
+FAILED tests/test_effluent_04_yi.py::test_yi_4_lineage_create_cannot_smuggle_shadow_layer
+FAILED tests/test_effluent_04_zheng.py::test_zheng_1_late_session_blocked_by_batch_lock
+FAILED tests/test_effluent_04_zheng.py::test_zheng_2_two_concurrent_sessions_race_acquire_and_write
+FAILED tests/test_effluent_04_zheng.py::test_zheng_3_sealed_d22_lock_error_distinct_from_freeze

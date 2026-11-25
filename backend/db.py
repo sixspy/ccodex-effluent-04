@@ -133,6 +133,7 @@ CREATE TABLE IF NOT EXISTS discharge_seals(
   sample_id INTEGER NOT NULL,
   sample_generation INTEGER NOT NULL,
   snapshot TEXT NOT NULL,
+  snapshot_metrics TEXT,
   seal_ref TEXT NOT NULL,
   status TEXT NOT NULL,
   sealed_at TEXT NOT NULL,
@@ -144,8 +145,35 @@ CREATE TABLE IF NOT EXISTS metric_lineage(
   to_sample_id INTEGER,
   edge_type TEXT NOT NULL,
   detail TEXT NOT NULL,
+  layer TEXT NOT NULL DEFAULT 'official',
+  draft_code TEXT,
+  promoted INTEGER NOT NULL DEFAULT 1,
   created_at TEXT NOT NULL,
   FOREIGN KEY(from_sample_id) REFERENCES sample_batches(id)
+);
+CREATE TABLE IF NOT EXISTS metric_shadow_drafts(
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  draft_code TEXT UNIQUE NOT NULL,
+  sample_id INTEGER NOT NULL,
+  metrics TEXT NOT NULL,
+  reason TEXT,
+  status TEXT NOT NULL DEFAULT '未升正',
+  promoted_generation INTEGER,
+  created_by TEXT,
+  created_at TEXT NOT NULL,
+  promoted_at TEXT,
+  FOREIGN KEY(sample_id) REFERENCES sample_batches(id)
+);
+CREATE TABLE IF NOT EXISTS deviation_log(
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  kind TEXT NOT NULL,
+  code TEXT,
+  sample_id INTEGER,
+  sample_code TEXT,
+  lock_key TEXT,
+  actor TEXT,
+  detail TEXT,
+  created_at TEXT NOT NULL
 );
 CREATE TABLE IF NOT EXISTS effluent_locks(
   lock_key TEXT PRIMARY KEY,
@@ -442,9 +470,52 @@ def seed_lineage(conn: sqlite3.Connection) -> None:
         )
 
 
+def _ensure_column(conn: sqlite3.Connection, table: str, column: str, ddl: str) -> None:
+    cols = {r[1] for r in conn.execute(f"PRAGMA table_info({table})").fetchall()}
+    if column not in cols:
+        conn.execute(f"ALTER TABLE {table} ADD COLUMN {ddl}")
+
+
+FREEZE_TRIGGER_DDL = """
+DROP TRIGGER IF EXISTS trg_eff04_metrics_freeze;
+CREATE TRIGGER trg_eff04_metrics_freeze
+BEFORE UPDATE OF metrics ON sample_batches
+FOR EACH ROW
+WHEN NEW.metrics IS NOT OLD.metrics
+ AND EXISTS (
+   SELECT 1 FROM discharge_seals d
+   WHERE d.sample_id = OLD.id AND d.status = '已封批'
+ )
+BEGIN
+  SELECT RAISE(ABORT, '封后禁改偏航：封批代生效后正式指标列零改拒写');
+END;
+"""
+
+
+def _migrate(conn: sqlite3.Connection) -> None:
+    """老库补列 + 封后指标冻结触发器（幂等）。"""
+    _ensure_column(conn, "discharge_seals", "snapshot_metrics", "snapshot_metrics TEXT")
+    _ensure_column(
+        conn, "metric_lineage", "layer", "layer TEXT NOT NULL DEFAULT 'official'"
+    )
+    _ensure_column(conn, "metric_lineage", "draft_code", "draft_code TEXT")
+    _ensure_column(
+        conn, "metric_lineage", "promoted", "promoted INTEGER NOT NULL DEFAULT 1"
+    )
+    # 老封批记录没有结构化快照：用同代正式列回填（种子库本就账实一致）
+    conn.execute(
+        """UPDATE discharge_seals SET snapshot_metrics=(
+               SELECT s.metrics FROM sample_batches s WHERE s.id=discharge_seals.sample_id
+           ) WHERE snapshot_metrics IS NULL"""
+    )
+    conn.executescript(FREEZE_TRIGGER_DDL)
+    conn.commit()
+
+
 def init_db() -> None:
     with connect() as conn:
         conn.executescript(SCHEMA)
+        _migrate(conn)
         seed_users(conn)
         seed_plants(conn)
         seed_outfalls(conn)
@@ -454,6 +525,12 @@ def init_db() -> None:
         seed_releases(conn)
         seed_seals(conn)
         seed_lineage(conn)
+        try:
+            from effluent04_seed import seed_incident
+
+            seed_incident(conn)
+        except FileNotFoundError:
+            pass
         conn.commit()
 
 

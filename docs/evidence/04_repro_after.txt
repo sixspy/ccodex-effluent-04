@@ -1,0 +1,15 @@
+[eff04] temp db = /tmp/eff04_repro_xmdi4h_u/repro.db
+
+=== jia_official_rewrite: FIXED ===
+  · 无事故症状
+
+=== yi_shadow_in_lineage: FIXED ===
+  · 无事故症状
+
+=== zheng_no_batch_lock: REPRODUCED ===
+  ! 两路同批改指标无锁：A=11.1 写入被覆盖，最终 cod=33.3（丢失更新）
+  ! 无批锁记录、无争用痕
+
+[zheng 注] 裸 SQL 读改写绕过服务层批锁，未封批探针仍会丢失更新——这是预期；批锁互斥由 tests/test_effluent_04_zheng.py 与 scripts/ping_metric_lock.py 经 HTTP 通道判定（已封批行另有触发器兜底零改）。
+
+VERDICT: ALL FIXED

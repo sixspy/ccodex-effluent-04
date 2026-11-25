@@ -1,6 +1,7 @@
 """排放指标演算与阈值辅助（被采样/对账链路调用）。"""
 from __future__ import annotations
 
+import re
 from typing import Iterable
 
 
@@ -55,6 +56,24 @@ def format_triplet(metrics: dict) -> str:
         f"NH3-N={m['nh3n']:.2f} "
         f"TP={m['tp']:.3f}"
     )
+
+
+def parse_triplet(text: str | None) -> dict | None:
+    """把 format_triplet 的快照文本解析回三指标（老封批记录无 JSON 列时兜底）。"""
+    if not text:
+        return None
+    patterns = {
+        "cod": r"COD\s*=\s*([0-9]+(?:\.[0-9]+)?)",
+        "nh3n": r"NH3-?N\s*=\s*([0-9]+(?:\.[0-9]+)?)",
+        "tp": r"TP\s*=\s*([0-9]+(?:\.[0-9]+)?)",
+    }
+    out: dict[str, float] = {}
+    for key, pat in patterns.items():
+        m = re.search(pat, text, flags=re.IGNORECASE)
+        if not m:
+            return None
+        out[key] = float(m.group(1))
+    return out
 
 
 def compare_to_caps(
